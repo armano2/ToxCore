@@ -25,7 +25,7 @@
 extern ToxWindow new_prompt();
 extern ToxWindow new_friendlist();
 
-extern int friendlist_onFriendAdded(int num);
+extern int friendlist_onFriendAdded(Messenger *m, int num);
 extern void disable_chatwin(int f_num);
 extern int add_req(uint8_t *public_key); // XXX
 
@@ -38,6 +38,8 @@ char WINDOW_STATUS[MAX_WINDOW_SLOTS];
 
 static ToxWindow windows[MAX_WINDOW_SLOTS];
 static ToxWindow* prompt;
+
+static Messenger *m;
 
 int w_num;
 int active_window;
@@ -62,25 +64,25 @@ void on_request(uint8_t *public_key, uint8_t *data, uint16_t length)
   }
 }
 
-void on_message(int friendnumber, uint8_t *string, uint16_t length)
+void on_message(Messenger *m, int friendnumber, uint8_t *string, uint16_t length)
 {
   int i;
   for (i = 0; i < MAX_WINDOW_SLOTS; ++i) {
     if (windows[i].onMessage != NULL)
-      windows[i].onMessage(&windows[i], friendnumber, string, length);
+      windows[i].onMessage(&windows[i], m, friendnumber, string, length);
   }
 }
 
-void on_action(int friendnumber, uint8_t *string, uint16_t length)
+void on_action(Messenger *m, int friendnumber, uint8_t *string, uint16_t length)
 {
   int i;
   for (i = 0; i < MAX_WINDOW_SLOTS; ++i) {
     if (windows[i].onAction != NULL)
-      windows[i].onAction(&windows[i], friendnumber, string, length);
+      windows[i].onAction(&windows[i], m, friendnumber, string, length);
   }
 }
 
-void on_nickchange(int friendnumber, uint8_t *string, uint16_t length)
+void on_nickchange(Messenger *m, int friendnumber, uint8_t *string, uint16_t length)
 {
   wprintw(prompt->window, "\n(nickchange) %d: %s\n", friendnumber, string);
   int i;
@@ -90,7 +92,7 @@ void on_nickchange(int friendnumber, uint8_t *string, uint16_t length)
   }
 }
 
-void on_statuschange(int friendnumber, uint8_t *string, uint16_t length)
+void on_statuschange(Messenger *m, int friendnumber, uint8_t *string, uint16_t length)
 {
   wprintw(prompt->window, "\n(statuschange) %d: %s\n", friendnumber, string);
   int i;
@@ -102,7 +104,7 @@ void on_statuschange(int friendnumber, uint8_t *string, uint16_t length)
 
 void on_friendadded(int friendnumber)
 {
-  friendlist_onFriendAdded(friendnumber);
+  friendlist_onFriendAdded(m, friendnumber);
 }
 /* CALLBACKS END */
 
@@ -128,14 +130,14 @@ static void init_term()
 static void init_tox()
 {
   /* Init core */
-  initMessenger();
+  m = initMessenger();
 
   /* Callbacks */
-  m_callback_friendrequest(on_request);
-  m_callback_friendmessage(on_message);
-  m_callback_namechange(on_nickchange);
-  m_callback_statusmessage(on_statuschange);
-  m_callback_action(on_action);
+  m_callback_friendrequest(m, on_request);
+  m_callback_friendmessage(m, on_message);
+  m_callback_namechange(m, on_nickchange);
+  m_callback_statusmessage(m, on_statuschange);
+  m_callback_action(m, on_action);
 }
 
 void init_window_status()
@@ -163,7 +165,7 @@ int add_window(ToxWindow w, int n)
     return -1;
 
   windows[n] = w;
-  w.onInit(&w);
+  w.onInit(&w, m);
   w_num++;
   return n;
 }
@@ -189,7 +191,7 @@ static void init_windows()
   w_num = 0;
   int n_prompt = 0;
   int n_friendslist = 1;
-  if (add_window(new_prompt(), n_prompt) == -1 
+  if (add_window(new_prompt(), n_prompt) == -1
                         || add_window(new_friendlist(), n_friendslist) == -1) {
     fprintf(stderr, "add_window() failed.\n");
     endwin();
@@ -209,7 +211,7 @@ static void do_tox()
     dht_on = false;
     wprintw(prompt->window, "\nDHT disconnected!\n");
   }
-  doMessenger();
+  doMessenger(m);
 }
 
 static void load_data(char *path)
@@ -237,17 +239,17 @@ static void load_data(char *path)
       endwin();
       exit(1);
     }
-    Messenger_load(buf, len);
+    Messenger_load(m, buf, len);
   }
   else {
-    len = Messenger_size();
+    len = Messenger_size(m);
     buf = malloc(len);
     if (buf == NULL) {
       fprintf(stderr, "malloc() failed.\n");
       endwin();
       exit(1);
     }
-    Messenger_save(buf);
+    Messenger_save(m, buf);
 
     fd = fopen(path, "w");
     if (fd == NULL) {
@@ -281,7 +283,7 @@ static void draw_bar()
   move(LINES - 1, 0);
 
   attron(COLOR_PAIR(4) | A_BOLD);
-  printw(" TOXIC " TOXICVER "|"); 
+  printw(" TOXIC " TOXICVER "|");
   attroff(COLOR_PAIR(4) | A_BOLD);
 
   int i;
@@ -363,7 +365,7 @@ int main(int argc, char *argv[])
     strcat(filename, CONFIGDIR);
     strcat(filename, "data");
   }
-  
+
   ToxWindow* a;
   int i = 0;
   for (i = 0; i < argc; ++i) {
@@ -402,7 +404,7 @@ int main(int argc, char *argv[])
                             "defaulting to 'data' for a keyfile...\n");
     attroff(COLOR_PAIR(3) | A_BOLD);
   }
-  
+
   while(true) {
     /* Update tox */
     do_tox();
@@ -419,7 +421,8 @@ int main(int argc, char *argv[])
     if (ch == '\t' || ch == KEY_BTAB)
       set_active_window(ch);
     else if (ch != ERR)
-      a->onKey(a, ch);
+      a->onKey(a, m, ch);
   }
+  cleanupMessenger(m);
   return 0;
 }
