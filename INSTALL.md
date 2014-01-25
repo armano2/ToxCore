@@ -1,7 +1,7 @@
 #Install Instructions
 
 - [Installation](#installation)
-    - [GNU/Linux](#gnu/linux)
+    - [Linux](#linux)
     - [OS X](#osx)
       - [Homebrew](#homebrew)
       - [Non-Homebrew](#non-homebrew)
@@ -10,8 +10,8 @@
 <a name="installation" />
 ##Installation
 
-<a name="gnu/linux" />
-###GNU/Linux:
+<a name="linux" />
+###Linux:
 
 Build dependencies:
 
